@@ -40,3 +40,31 @@ router.post("/shares", (req, res) => {
     res.json({ code, expires_at: expiresAt, document_ids });
     module.exports = router;
 });
+
+router.get("/shares", (req, res) => {
+    const code = req.params.code.toUpperCase();
+    const viewerId = req.query.viewer_id;
+    const share = db.getShare(code);
+    if(!share) {
+        return res.status().json({error: "Share code not found"});
+    }
+    else if(new Date(share.expiresAt()) <= new Date()) {
+        return res.status().json({error: "This share has expired"});
+    }
+    const viewer = viewerId ? db.getUser(viewerId) : undefined;
+    if(!viewer || viewer.role !== "staff") {
+        return res.status(403).json({error: "Only staff members can open shares"});
+    }
+    let documents = db.getDocuments(share.document_ids);
+    for(const doc of documents) {
+        b.logAccess({shareCode: code, viewerId: viewer.id, documentId: doc.id});
+    }
+    res.json({
+        patient: share.patient_id,
+        expires_at: share.expires_at,
+        documents,
+    });
+});
+router.get("/patients/:id/access-log", (req, res) => {
+    res.json(db.listAccessLog(req.params.id));
+});
